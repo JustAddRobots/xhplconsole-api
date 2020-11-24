@@ -1,10 +1,8 @@
 package main
 
 import (
-	"xhplconsole-api/app"
-	"xhplconsole-api/db"
-	//"github.com/JustAddRobots/xhplconsole-api/app"
-	//"github.com/JustAddRobots/xhplconsole-api/db"
+	"github.com/JustAddRobots/xhplconsole-api/app"
+	"github.com/JustAddRobots/xhplconsole-api/db"
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
