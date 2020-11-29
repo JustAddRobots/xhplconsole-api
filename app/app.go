@@ -2,15 +2,15 @@ package app
 
 import (
 	"encoding/json"
-	"fmt"
 	_ "github.com/go-sql-driver/mysql"
+	//	"github.com/doug-martin/goqu/v9"
 	"github.com/gorilla/mux"
+	"github.com/jmoiron/modl"
 	"github.com/jmoiron/sqlx"
 	"gopkg.in/guregu/null.v3"
+	"io/ioutil"
 	"log"
 	"net/http"
-	"regexp"
-	"strings"
 	"time"
 )
 
@@ -27,32 +27,30 @@ type Machine struct {
 	           if command uses options:
 	               capitalise options in suffix (e.g. LspciVVV)
 	*/
-	ID                     int         `db:"ID"`
-	UUID                   null.String `db:"uuid"`
-	LogID                  null.String `db:"log_id"`
-	LogTime                time.Time   `db:"log_time"`
-	SerialNum              null.String `db:"serial_num"`
-	CPUVendor              null.String `db:"cpu_vendor"`
-	CPUFamilyModelStepping null.String `db:"cpu_family_model_stepping"`
-	CPUCoreCount           null.String `db:"cpu_core_count"`
-	CPUFlags               null.String `db:"cpu_flags"`
-	LsCPU                  null.String `db:"lscpu"`
-	CPUInfo                null.String `db:"cpuinfo"`
-	DMIdecode              null.String `db:"dmidecode"`
-	MemInfo                null.String `db:"meminfo"`
-	TestName               null.String `db:"test_name"`
-	TestCmd                null.String `db:"test_cmd"`
-	TimeStart              time.Time   `db:"time_start"`
-	TimeEnd                time.Time   `db:"time_end"`
-	TestParams             null.String `db:"test_params"`
-	TestMetric             null.String `db:"test_metric"`
-	TestStatus             null.String `db:"test_status"`
-	TestLog                null.String `db:"test_log"`
-	CPUs                   map[string]map[string]string
-	DIMMs                  map[string]map[string]string
+	ID              int                 `db:"id" json:"id"`
+	UUID            null.String         `db:"uuid" json:"uuid,string"`
+	LogID           null.String         `db:"log_id" json:"log_id,string"`
+	CPUCoreCount    null.Int            `db:"cpu_core_count" json:"cpu_core_count,int"`
+	CPUFamModelStep null.String         `db:"cpu_family_model_stepping" json:"cpu_family_model_stepping,string"`
+	CPUFlags        null.String         `db:"cpu_flags" json:"cpu_flags,string"`
+	CPUVendor       null.String         `db:"cpu_vendor" json:"cpu_vendor,string"`
+	CPUInfo         []map[string]string `db:"cpuinfo" json:"cpuinfo"`
+	DMIdecode       map[string][]string `db:"dmidecode" json:"dmidecode"`
+	LogTime         time.Time           `db:"log_time"`
+	LsCPU           map[string]string   `db:"lscpu" json:"lscpu"`
+	MemInfo         map[string]int      `db:"meminfo" json:"meminfo"`
+	SerialNum       null.String         `db:"serial_num" json:"serial_num,string"`
+	TestCmd         null.String         `db:"test_cmd" json:"test_cmd,string"`
+	TimeEnd         time.Time           `db:"time_end" json:"time_start"`
+	TestLog         null.String         `db:"test_log" json:"test_log,string"`
+	TestMetric      null.String         `db:"test_metric" json:"test_metric,string"`
+	TestName        null.String         `db:"test_name" json:"test_name,string"`
+	TestParams      map[string]int      `db:"test_params" json:"test_params"`
+	TimeStart       time.Time           `db:"time_start" json:"time_start"`
+	TestStatus      null.String         `db:"test_status" json:"test_status,string"`
+	CPUs            map[string]map[string]string
+	DIMMs           map[string]map[string]string
 }
-
-type NullString null.String
 
 type App struct {
 	Router   *mux.Router
@@ -64,69 +62,105 @@ func (app *App) SetupRouter() {
 		Methods("POST").
 		Path("/machines").
 		HandlerFunc(app.createMachine)
-	app.Router.
-		Methods("GET").
-		Path("/machines").
-		HandlerFunc(app.getMachines)
-	app.Router.
-		Methods("GET").
-		Path("/machines/{id}").
-		HandlerFunc(app.getMachine)
 	/*
 		app.Router.
-			Methods("PUT").
-			Path("/machines/{id}").
-			HandlerFunc(app.updateMachine)
+			Methods("GET").
+			Path("/machines").
+			HandlerFunc(app.getMachines)
 		app.Router.
-			Methods("DELETE").
+			Methods("GET").
 			Path("/machines/{id}").
-			HandlerFunc(app.deleteMachine)
-		   app.Router.
-		       Methods("GET").
-		       Path("/machines/{id}/hardware-only").
-		       HandlerFunc(app.getMachineDevicesOnly)
+			HandlerFunc(app.getMachine)
+			app.Router.
+				Methods("PUT").
+				Path("/machines/{id}").
+				HandlerFunc(app.updateMachine)
+			app.Router.
+				Methods("DELETE").
+				Path("/machines/{id}").
+				HandlerFunc(app.deleteMachine)
+			   app.Router.
+			       Methods("GET").
+			       Path("/machines/{id}/hardware-only").
+			       HandlerFunc(app.getMachineDevicesOnly)
 	*/
 }
 
 func (app *App) createMachine(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	//reqBody, _ := ioutil.ReadAll(r.body)
+	var err error
+	reqBody, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
 	var machine Machine
-	//json.Unmarshal(reqBody, &machine)
-	json.NewDecoder(r.Body).Decode(&machine)
+	err = json.Unmarshal(reqBody, &machine)
+	if err != nil {
+		log.Fatal(err)
+		//log.Fatalf("%s, %s", string(reqBody), err)
+	}
 
-	SQL_id := "INSERT IGNORE INTO machine.id (" +
-		"uuid, serial_num" +
-		") VALUES (" +
-		":uuid, :serial_num" +
-		")"
+	dbmap := modl.NewDbMap(app.Database.DB, modl.MySQLDialect{})
+	dbmap.AddTable(Machine{}, "xhpltest").SetKeys(true, "id")
+	/*
+		s, err := dbmap.CreateTablesIfNotExistsSql()
+		if err != nil {
+			log.Fatalf("%s, %s", err, s)
+		}
+	*/
+	err = dbmap.CreateTables()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	SQL_hardware := "INSERT INTO machine.hardware (" +
-		"uuid, log_id, cpu_vendor, cpu_family_model_stepping, " +
-		"cpu_core_count, cpu_flags, lscpu, cpuinfo, dmidecode, meminfo" +
-		") VALUES (" +
-		":uuid, :log_id, :cpu_vendor, :cpu_family_model_stepping, " +
-		":cpu_core_count, :cpu_flags, :lscpu, :cpuinfo, :dmidecode, :meminfo" +
-		")"
-
-	SQL_test := "INSERT INTO machine.test (" +
-		"uuid, log_id, test_name, test_cmd, time_start, time_end, " +
-		"test_params, test_metric, test_status, test_log, log_time" +
-		") VALUES (" +
-		":uuid, :log_id, :test_name, :test_cmd, :time_start, :time_end, " +
-		":test_params, :test_metric, :test_status, :test_log, :log_time" +
-		")"
-
-	tx, err := db.MustBegin()
+	tx, err := dbmap.Begin()
 	if err != nil {
 		tx.Rollback()
-		log.Fatal(fmt.Sprintf("Database INSERT failed, %s", err))
+		log.Fatal(err)
 	}
-	_, err = tx.NamedExec(SQL_id, &machine)
+	err = tx.Insert(&machine)
 	if err != nil {
 		tx.Rollback()
-		log.Fatal(fmt.Sprintf("id Database INSERT failed, %s", err))
+		log.Fatalf("Transaction INSERT failed, %s", err)
 	}
+	err = tx.Commit()
+	if err != nil {
+		tx.Rollback()
+		log.Fatalf("Transaction COMMIT failed, %s", err)
+	}
+	log.Print("Database INSERT complete.")
+
+	/*
+		SQL := "INSERT INTO xhpltest (" +
+			"uuid, log_id, cpu_vendor, cpu_family_model_stepping, " +
+			"cpu_core_count, cpu_flags, lscpu, cpuinfo, dmidecode, meminfo " +
+			"serial_num, test_name, test_cmd, time_start, time_end, " +
+			"test_params, test_metric, test_status, test_log, log_time" +
+			") VALUES (" +
+			":uuid, :log_id, :cpu_vendor, :cpu_family_model_stepping, " +
+			":cpu_core_count, :cpu_flags, :lscpu, :cpuinfo, :dmidecode, :meminfo " +
+			":serial_num, :test_name, :test_cmd, :time_start, :time_end, " +
+			":test_params, :test_metric, :test_status, :test_log, :log_time" +
+			")"
+
+		tx := app.Database.MustBegin()
+		_, err = tx.NamedExec(SQL, &machine)
+		if err != nil {
+			tx.Rollback()
+			log.Fatal(fmt.Sprintf("Database INSERT failed, %s", err))
+		}
+		err = tx.Commit()
+		if err != nil {
+			tx.Rollback()
+			log.Fatal(fmt.Sprintf("Database COMMIT failed, %s", err))
+		}
+		log.Print("Database INSERT complete.")
+	*/
+}
+
+/*
+func (app *App) getMachines(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 	_, err = tx.NamedExec(SQL_hardware, &machine)
 	if err != nil {
 		tx.Rollback()
@@ -137,20 +171,18 @@ func (app *App) createMachine(w http.ResponseWriter, r *http.Request) {
 		tx.Rollback()
 		log.Fatal(fmt.Sprintf("test Database INSERT failed, %s", err))
 	}
-	err = tx.Commit()
-	if err != nil {
-		tx.Rollback()
-		log.Fatal(fmt.Sprintf("Database COMMIT failed, %s", err))
-	}
-}
-
-func (app *App) getMachines(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
 
 	var err error
-	SQL := "SELECT t.id, id.serial_num, hw.uuid, hw.log_id " +
+	SQL := "SELECT hw.id, hw.uuid, hw.log_id " +
+		"FROM xhplconsole.xhpltest hw " +
+		"ORDER BY " +
+		"hw.id DESC LIMIT 3"
+*/ /*
+	SQL := "SELECT hw.id, id.serial_num, hw.uuid, hw.log_id " +
 		"FROM xhplconsole.machine_id AS id, xhplconsole.machine_hardware AS hw " +
-		"LEFT JOIN ON id.uuid = hw.uuid LEFT JOIN ORDER BY hw.id DESC LIMIT 3"
+		"LEFT JOIN ON id.uuid = hw.uuid LEFT JOIN ON t.uuid = hw.uuid ORDER BY " +
+		"hw.id DESC LIMIT 3"
+*/ /*
 	machines := []Machine{}
 	err = app.Database.Select(&machines, SQL)
 	if err != nil {
@@ -158,19 +190,25 @@ func (app *App) getMachines(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewEncoder(w).Encode(machines)
 }
-
+*/ /*
 func (app *App) getMachine(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	params := mux.Vars(r)
 
 	var err error
+*/ /*
 	SQL := "SELECT t.id, id.serial_num, hw.uuid, hw.logid, hw.cpu_vendor, " +
 		"hw.cpu_family_model_stepping, hw.cpu_core_count, t.test_name, " +
 		"t.test_cmd, t.test_params, t.test_metric, t.test_status FROM " +
 		"xhplconsole.machine_hardware AS hw, xhplconsole.machine_test AS t, " +
 		"xhplconsole.machine_id AS id LEFT JOIN ON hw.uuid = t.uuid LEFT JOIN " +
 		"ON t.uuid = id.uuid " +
-		fmt.Sprintf("WHERE t.id = %s", params["id"])
+*/ /*
+	SQL := "SELECT hw.uuid, hw.logid, hw.cpu_vendor, " +
+		"hw.cpu_family_model_stepping, hw.cpu_core_count " +
+		"FROM " +
+		"xhplconsole.xhpltest AS hw " +
+		fmt.Sprintf("WHERE hw.id = %s", params["id"])
 	machine := Machine{}
 	err = app.Database.Get(&machine, SQL)
 	if err != nil {
@@ -178,8 +216,7 @@ func (app *App) getMachine(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewEncoder(w).Encode(machine)
 }
-
-/*
+*/ /*
 func (app *App) getMachineHardwareOnly(w httpResponseWriter, r *http.Request) {
     w.Header().Set("Content-Type", "application/json")
     params := mux.Vars(r)
