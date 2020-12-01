@@ -15,7 +15,7 @@ func main() {
 	}
 
 	app := &app.App{
-		Router:   mux.NewRouter().StrictSlash(true),
+		Router:   mux.NewRouter().StrictSlash(true).PathPrefix("/v1").Subrouter(),
 		Database: database,
 	}
 
