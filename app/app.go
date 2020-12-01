@@ -5,54 +5,66 @@ import (
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
+	//	"github.com/jmoiron/modl"
 	"github.com/jmoiron/sqlx"
 	"gopkg.in/guregu/null.v3"
+	"io/ioutil"
 	"log"
 	"net/http"
-	"regexp"
-	"strings"
+	//	"reflect"
 	"time"
 )
 
-type Machine struct {
-	/*
-	   Field names adhere to Go conventions:
-	   https://golang.org/ref/spec#Exported_identifiers
-	   https://github.com/golang/go/wiki/CodeReviewComments
-	   https://github.com/golang/go/wiki/CodeReviewComments#initialisms
-	   Note: All fields must be exported for access by sqlx package.
-	   for fields named after commands:
-	       if command is executable:
-	           capitilise first letter (e.g. LsCPU)
-	           if command uses options:
-	               capitalise options in suffix (e.g. LspciVVV)
-	*/
-	ID                     int         `db:"ID"`
-	UUID                   null.String `db:"uuid"`
-	LogID                  null.String `db:"log_id"`
-	LogTime                time.Time   `db:"log_time"`
-	SerialNum              null.String `db:"serial_num"`
-	CPUVendor              null.String `db:"cpu_vendor"`
-	CPUFamilyModelStepping null.String `db:"cpu_family_model_stepping"`
-	CPUCoreCount           null.String `db:"cpu_core_count"`
-	CPUFlags               null.String `db:"cpu_flags"`
-	LsCPU                  null.String `db:"lscpu"`
-	CPUInfo                null.String `db:"cpuinfo"`
-	DMIdecode              null.String `db:"dmidecode"`
-	MemInfo                null.String `db:"meminfo"`
-	TestName               null.String `db:"test_name"`
-	TestCmd                null.String `db:"test_cmd"`
-	TimeStart              time.Time   `db:"time_start"`
-	TimeEnd                time.Time   `db:"time_end"`
-	TestParams             null.String `db:"test_params"`
-	TestMetric             null.String `db:"test_metric"`
-	TestStatus             null.String `db:"test_status"`
-	TestLog                null.String `db:"test_log"`
-	CPUs                   map[string]map[string]string
-	DIMMs                  map[string]map[string]string
+// Need to mitigate issues with Unmarshalling into custom types.
+// For now this ugly hack of two struct works...
+
+type Mach struct {
+	ID              int         `db:"id" json:"id"`
+	UUID            null.String `db:"uuid" json:"uuid,omitempty"`
+	LogID           null.String `db:"log_id" json:"log_id,omitempty"`
+	CPUCoreCount    null.Int    `db:"cpu_core_count" json:"cpu_core_count,omitempty"`
+	CPUFamModelStep null.String `db:"cpu_family_model_stepping" json:"cpu_family_model_stepping,omitempty"`
+	CPUFlags        null.String `db:"cpu_flags" json:"cpu_flags,omitempty"`
+	CPUVendor       null.String `db:"cpu_vendor" json:"cpu_vendor,omitempty"`
+	CPUInfo         null.String `db:"cpuinfo" json:"cpuinfo,omitempty"`
+	DMIDecode       null.String `db:"dmidecode" json:"dmidecode,omitempty"`
+	LogTime         time.Time   `db:"log_time" json:"log_time,omitempty"`
+	LsCPU           null.String `db:"lscpu" json:"lscpu,omitempty"`
+	MemInfo         null.String `db:"meminfo" json:"meminfo,omitempty"`
+	SerialNum       null.String `db:"serial_num" json:"serial_num,omitempty"`
+	TestCmd         null.String `db:"test_cmd" json:"test_cmd,omitempty"`
+	TimeEnd         time.Time   `db:"time_end" json:"time_start,omitempty"`
+	TestLog         null.String `db:"test_log" json:"test_log,omitempty"`
+	TestMetric      null.String `db:"test_metric" json:"test_metric,omitempty"`
+	TestName        null.String `db:"test_name" json:"test_name,omitempty"`
+	TestParams      null.String `db:"test_params" json:"test_params,omitempty"`
+	TimeStart       time.Time   `db:"time_start" json:"time_start,omitempty"`
+	TestStatus      null.String `db:"test_status" json:"test_status,omitempty"`
 }
 
-type NullString null.String
+type Machine struct {
+	ID              int                 `db:"id" json:"id"`
+	UUID            null.String         `db:"uuid" json:"uuid,omitempty"`
+	LogID           null.String         `db:"log_id" json:"log_id,omitempty"`
+	CPUCoreCount    null.Int            `db:"cpu_core_count" json:"cpu_core_count,omitempty"`
+	CPUFamModelStep null.String         `db:"cpu_family_model_stepping" json:"cpu_family_model_stepping,omitempty"`
+	CPUFlags        null.String         `db:"cpu_flags" json:"cpu_flags,omitempty"`
+	CPUVendor       null.String         `db:"cpu_vendor" json:"cpu_vendor,omitempty"`
+	CPUInfo         []map[string]string `db:"cpuinfo" json:"cpuinfo,omitempty"`
+	DMIDecode       map[string][]string `db:"dmidecode" json:"dmidecode,omitempty"`
+	LogTime         time.Time           `db:"log_time" json:"log_time,omitempty"`
+	LsCPU           map[string]string   `db:"lscpu" json:"lscpu,omitempty"`
+	MemInfo         map[string]int      `db:"meminfo" json:"meminfo,omitempty"`
+	SerialNum       null.String         `db:"serial_num" json:"serial_num,omitempty"`
+	TestCmd         null.String         `db:"test_cmd" json:"test_cmd,omitempty"`
+	TimeEnd         time.Time           `db:"time_end" json:"time_start,omitempty"`
+	TestLog         null.String         `db:"test_log" json:"test_log,omitempty"`
+	TestMetric      null.String         `db:"test_metric" json:"test_metric,omitempty"`
+	TestName        null.String         `db:"test_name" json:"test_name,omitempty"`
+	TestParams      map[string]int      `db:"test_params" json:"test_params,omitempty"`
+	TimeStart       time.Time           `db:"time_start" json:"time_start,omitempty"`
+	TestStatus      null.String         `db:"test_status" json:"test_status,omitempty"`
+}
 
 type App struct {
 	Router   *mux.Router
@@ -73,7 +85,6 @@ func (app *App) SetupRouter() {
 		Path("/machines/{id}").
 		HandlerFunc(app.getMachine)
 	/*
-		app.Router.
 			Methods("PUT").
 			Path("/machines/{id}").
 			HandlerFunc(app.updateMachine)
@@ -81,142 +92,88 @@ func (app *App) SetupRouter() {
 			Methods("DELETE").
 			Path("/machines/{id}").
 			HandlerFunc(app.deleteMachine)
-		   app.Router.
-		       Methods("GET").
-		       Path("/machines/{id}/hardware-only").
-		       HandlerFunc(app.getMachineDevicesOnly)
 	*/
 }
 
 func (app *App) createMachine(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	//reqBody, _ := ioutil.ReadAll(r.body)
+	var err error
+	reqBody, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Fatalf("ReadAll failed %s", err)
+	}
 	var machine Machine
-	//json.Unmarshal(reqBody, &machine)
-	json.NewDecoder(r.Body).Decode(&machine)
-
-	SQL_id := "INSERT IGNORE INTO machine.id (" +
-		"uuid, serial_num" +
-		") VALUES (" +
-		":uuid, :serial_num" +
-		")"
-
-	SQL_hardware := "INSERT INTO machine.hardware (" +
-		"uuid, log_id, cpu_vendor, cpu_family_model_stepping, " +
-		"cpu_core_count, cpu_flags, lscpu, cpuinfo, dmidecode, meminfo" +
-		") VALUES (" +
-		":uuid, :log_id, :cpu_vendor, :cpu_family_model_stepping, " +
-		":cpu_core_count, :cpu_flags, :lscpu, :cpuinfo, :dmidecode, :meminfo" +
-		")"
-
-	SQL_test := "INSERT INTO machine.test (" +
-		"uuid, log_id, test_name, test_cmd, time_start, time_end, " +
-		"test_params, test_metric, test_status, test_log, log_time" +
-		") VALUES (" +
-		":uuid, :log_id, :test_name, :test_cmd, :time_start, :time_end, " +
-		":test_params, :test_metric, :test_status, :test_log, :log_time" +
-		")"
-
-	tx, err := db.MustBegin()
+	err = json.Unmarshal(reqBody, &machine)
 	if err != nil {
-		tx.Rollback()
-		log.Fatal(fmt.Sprintf("Database INSERT failed, %s", err))
+		log.Fatalf("Unmarshal failed %s", err)
 	}
-	_, err = tx.NamedExec(SQL_id, &machine)
-	if err != nil {
-		tx.Rollback()
-		log.Fatal(fmt.Sprintf("id Database INSERT failed, %s", err))
-	}
-	_, err = tx.NamedExec(SQL_hardware, &machine)
-	if err != nil {
-		tx.Rollback()
-		log.Fatal(fmt.Sprintf("hardware Database INSERT failed, %s", err))
-	}
-	_, err = tx.NamedExec(SQL_test, &machine)
-	if err != nil {
-		tx.Rollback()
-		log.Fatal(fmt.Sprintf("test Database INSERT failed, %s", err))
-	}
+
+	// Marshal maps/lists separately to JSON byte stream
+	cpuinfo_json, _ := json.Marshal(machine.CPUInfo)
+	dmidecode_json, _ := json.Marshal(machine.DMIDecode)
+	lscpu_json, _ := json.Marshal(machine.LsCPU)
+	meminfo_json, _ := json.Marshal(machine.MemInfo)
+	testparams_json, _ := json.Marshal(machine.TestParams)
+
+	// Yeah its an ugly wall of text, but will do for now.
+	// sqlx.NamedExec() would've been great here, but since maps/lists must be
+	// Marshalled, creating another struct just for JSON columns seems just about
+	// as ugly. IMO map/lists -> JSON SQL is suprisingly janky in golang.
+	tx := app.Database.MustBegin()
+	tx.MustExec("INSERT INTO xhpltest ( uuid, log_id, cpu_vendor, cpu_family_model_stepping,  cpu_core_count, cpu_flags, lscpu, cpuinfo, dmidecode,  meminfo, serial_num, test_name, test_cmd, time_start,  time_end, test_params, test_metric, test_status, test_log,  log_time) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )", machine.UUID, machine.LogID, machine.CPUVendor, machine.CPUFamModelStep, machine.CPUCoreCount, machine.CPUFlags, lscpu_json, cpuinfo_json, dmidecode_json, meminfo_json, machine.SerialNum, machine.TestName, machine.TestCmd, machine.TimeStart, machine.TimeEnd, testparams_json, machine.TestMetric, machine.TestStatus, machine.TestLog, machine.LogTime)
 	err = tx.Commit()
 	if err != nil {
 		tx.Rollback()
-		log.Fatal(fmt.Sprintf("Database COMMIT failed, %s", err))
+		log.Fatalf("Commit failed, %s", err)
 	}
+	log.Print("Database INSERT complete.")
 }
 
 func (app *App) getMachines(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-
 	var err error
-	SQL := "SELECT t.id, id.serial_num, hw.uuid, hw.log_id " +
-		"FROM xhplconsole.machine_id AS id, xhplconsole.machine_hardware AS hw " +
-		"LEFT JOIN ON id.uuid = hw.uuid LEFT JOIN ORDER BY hw.id DESC LIMIT 3"
-	machines := []Machine{}
-	err = app.Database.Select(&machines, SQL)
+
+	SQL := "SELECT id, serial_num, uuid, log_id, cpu_vendor, " +
+		"cpu_family_model_stepping FROM xhpltest ORDER BY id DESC LIMIT 3"
+	var machines []Mach
+	rows, err := app.Database.Queryx(SQL)
 	if err != nil {
-		log.Fatal(fmt.Sprintf("Database SELECT failed, %s", err))
+		log.Fatalf("Queryx failed, %s", err)
+	}
+	err = sqlx.StructScan(rows, &machines)
+	if err != nil {
+		log.Fatalf("StructScan failed, %s", err)
 	}
 	json.NewEncoder(w).Encode(machines)
 }
 
 func (app *App) getMachine(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	var err error
+	var m Mach
 	params := mux.Vars(r)
 
-	var err error
-	SQL := "SELECT t.id, id.serial_num, hw.uuid, hw.logid, hw.cpu_vendor, " +
-		"hw.cpu_family_model_stepping, hw.cpu_core_count, t.test_name, " +
-		"t.test_cmd, t.test_params, t.test_metric, t.test_status FROM " +
-		"xhplconsole.machine_hardware AS hw, xhplconsole.machine_test AS t, " +
-		"xhplconsole.machine_id AS id LEFT JOIN ON hw.uuid = t.uuid LEFT JOIN " +
-		"ON t.uuid = id.uuid " +
-		fmt.Sprintf("WHERE t.id = %s", params["id"])
-	machine := Machine{}
-	err = app.Database.Get(&machine, SQL)
+	SQL := "SELECT * FROM xhpltest " +
+		fmt.Sprintf("WHERE id = %s", params["id"])
+	row := app.Database.QueryRowx(SQL)
+	err = row.StructScan(&m)
 	if err != nil {
-		log.Fatal(fmt.Sprintf("Database SELECT failed, %s", err))
+		log.Fatalf("StructScan failed, %s", err)
 	}
-	json.NewEncoder(w).Encode(machine)
+	/*
+		for _, colName := range cols {
+			if colName == "lscpu" {
+				var b []byte
+				err = rw.Scan(&b)
+				if err != nil {
+					log.Fatalf("Database rw.Scan failed, %s", err)
+				}
+				err := json.Unmarshal(b, &m.LsCPU)
+				if err != nil {
+					log.Fatalf("Unmarshal failed, %s", err)
+				}
+			}
+		}
+	*/
+	json.NewEncoder(w).Encode(m)
 }
-
-/*
-func (app *App) getMachineHardwareOnly(w httpResponseWriter, r *http.Request) {
-    w.Header().Set("Content-Type", "application/json")
-    params := mux.Vars(r)
-
-    var err error
-    SQL := "SELECT id,uuid,log_id,cpu_vendor,cpu_family_model_stepping," +
-        "cpu_core_count,cpu_flags FROM xhplconsole.machine_hardware " +
-        fmt.Sprintf("WHERE id = %s", params["id"])
-    machine := Machine{}
-    err = app.Database.Get(&machine, SQL)
-    if err != nil {
-        log.Fatal(fmt.Sprintf("Database SELECT failed, %s", err))
-    }
-    m := make(map[string]map[string]string)
-    stanzas := regexp.MustCompile(`\n\n`).Split(machine.CPUInfo, -1)
-    for _, stanza := range stanzas {
-        kv := make(map[string]string)
-        lines := regexp.MustCompile("\n").Split(stanza, -1)
-        for _, line := range lines {
-            if line != "" {
-                fields := strings.FieldsFunc(line, func(r rune) bool {
-                    if r == ':' {
-                        return true
-                    }
-                    return false
-                })
-                k := strings.TrimSpace(fields[0])
-                v := ""
-                if len(fields) == 2 {
-                    v = strings.TrimSpace(fields[1])
-                }
-                kv[k] = v
-            }
-        }
-        m[kv["processor"]] = kv
-    }
-    machine.CPUs = m
-    json.NewEncoder(w).Encode(machine)
-}
-*/
