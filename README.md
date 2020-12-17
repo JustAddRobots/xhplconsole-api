@@ -27,8 +27,10 @@ This project is **not supported**.
 ❯ go build
 ❯ ./xhplconsole-api
 ```
+The default endpoint is *locahost:3456/v1/machines*
 
-This POC has some specific environment requirments:
+
+This POC has some specific environment requirements:
 
 It requires access to a local DB (schema below). It also uses a local INI config file
 to resolve the DB password.
