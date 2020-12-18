@@ -72,7 +72,7 @@ MariaDB [xhplconsole]> SHOW COLUMNS FROM xhpltest;
 ❯ ./xhplconsole-api
 ```
 
-Using from Python interpreter with logs generated from *runxhpl*.
+Example from Python interpreter, logs generated from *runxhpl*.
 
 ```
 ❯ python3
@@ -83,7 +83,14 @@ Using from Python interpreter with logs generated from *runxhpl*.
 >>> m = json.loads(s)
 >>> r = requests.post("http://hosaka.local:3456/v1/machines", json=m)
 ```
-
+```
+>>> r = requests.get("http://hosaka.local:3456/v1/machines/89")
+>>> r.status_code
+200
+>>> m = r.json()
+>>> m["test_cmd"]
+'mpirun --allow-run-as-root -mca btl_vader_single_copy_mechanism none -np 4 xhpl-x86_64'
+```
 
 ## Todo
 
