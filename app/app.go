@@ -30,6 +30,7 @@ type Mach struct {
 	CPUInfo         null.String `db:"cpuinfo" json:"cpuinfo,omitempty"`
 	DMIDecode       null.String `db:"dmidecode" json:"dmidecode,omitempty"`
 	LsCPU           null.String `db:"lscpu" json:"lscpu,omitempty"`
+	LogTime         null.String `db:"log_time" json:"log_time"`
 	MemInfo         null.String `db:"meminfo" json:"meminfo,omitempty"`
 	SerialNum       null.String `db:"serial_num" json:"serial_num,omitempty"`
 	TestCmd         null.String `db:"test_cmd" json:"test_cmd,omitempty"`
@@ -53,6 +54,7 @@ type Machine struct {
 	CPUVendor       null.String         `db:"cpu_vendor" json:"cpu_vendor,omitempty"`
 	CPUInfo         []map[string]string `db:"cpuinfo" json:"cpuinfo,omitempty"`
 	DMIDecode       map[string][]string `db:"dmidecode" json:"dmidecode,omitempty"`
+	LogTime         null.String         `db:"log_time" json:"log_time"`
 	LsCPU           map[string]string   `db:"lscpu" json:"lscpu,omitempty"`
 	MemInfo         map[string]int      `db:"meminfo" json:"meminfo,omitempty"`
 	SerialNum       null.String         `db:"serial_num" json:"serial_num,omitempty"`
@@ -84,17 +86,17 @@ func (app *App) SetupRouter() {
 		Methods("GET").
 		Path("/machines/{id}").
 		HandlerFunc(app.getMachine)
-		/*
-			// Need to figure out a good reason to UPDATE a record
-
-					Methods("PUT").
-					Path("/machines/{id}").
-					HandlerFunc(app.updateMachine)
-		*/
-	app.Router.
-		Methods("DELETE").
-		Path("/machines/{id}").
-		HandlerFunc(app.deleteMachine)
+	/*
+			// Need to figure out a good reason to UPDATE/DELETE a record
+		app.Router.
+			Methods("PUT").
+			Path("/machines/{id}").
+			HandlerFunc(app.updateMachine)
+		app.Router.
+			Methods("DELETE").
+			Path("/machines/{id}").
+			HandlerFunc(app.deleteMachine)
+	*/
 }
 
 func (app *App) createMachine(w http.ResponseWriter, r *http.Request) {
